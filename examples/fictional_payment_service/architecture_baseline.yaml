@@ -1,0 +1,390 @@
+metadata:
+  name: "ApexPay Core Settlement Service"
+  version: "1.0.0"
+  ruleset_version: "2026.11"
+  created_at: "2026-11-18"
+  author: "Principal Infrastructure Risk Architect"
+  description: "Fictional production multi-cloud payment settlement platform with active primary and warm standby backup arrangements."
+
+service:
+  id: "apexpay-settlement"
+  name: "ApexPay Settlement Service"
+  criticality: "tier-1-critical"
+  primary_arrangement:
+    name: "Primary AWS Arrangement"
+    root_component_id: "apexpay-primary-api"
+    description: "Primary payment gateway router and orchestration running on AWS eu-west-1."
+  backup_arrangement:
+    name: "Backup Azure Arrangement"
+    root_component_id: "apexpay-backup-api"
+    description: "Secondary warm-standby settlement engine running on Azure westeurope."
+  description: "Critical payment processing engine handling credit card, UPI, and bank rails."
+
+providers:
+  - id: "provider-aws"
+    name: "Amazon Web Services"
+    category: "cloud"
+    description: "Cloud infrastructure host for primary arrangement"
+  - id: "provider-azure"
+    name: "Microsoft Azure"
+    category: "cloud"
+    description: "Cloud infrastructure host for backup arrangement"
+  - id: "provider-cloudflare"
+    name: "Cloudflare Inc."
+    category: "edge_dns"
+    description: "Global edge and DNS authoritative resolver"
+  - id: "provider-okta"
+    name: "Okta Identity Cloud"
+    category: "identity"
+    description: "Enterprise SaaS Identity and Token Verification Provider"
+  - id: "provider-stripe"
+    name: "Stripe Payments"
+    category: "payment_processor"
+    description: "External payment gateway processor"
+  - id: "provider-adyen"
+    name: "Adyen Global"
+    category: "payment_processor"
+    description: "Secondary external payment gateway processor"
+
+deployments:
+  - id: "deploy-aws-eu-west-1"
+    provider_id: "provider-aws"
+    region: "eu-west-1"
+    environment: "production"
+    description: "AWS Ireland production VPC"
+  - id: "deploy-azure-westeurope"
+    provider_id: "provider-azure"
+    region: "westeurope"
+    environment: "dr-standby"
+    description: "Azure Netherlands warm standby VNet"
+  - id: "deploy-cloudflare-global"
+    provider_id: "provider-cloudflare"
+    region: "global-anycast"
+    environment: "production"
+  - id: "deploy-okta-us-cell"
+    provider_id: "provider-okta"
+    region: "us-east-cell-1"
+    environment: "production"
+
+failure_domains:
+  - id: "fd-aws-eu-west-1"
+    name: "AWS Region eu-west-1"
+    type: "region"
+    provider_id: "provider-aws"
+  - id: "fd-azure-westeurope"
+    name: "Azure Region West Europe"
+    type: "region"
+    provider_id: "provider-azure"
+  - id: "fd-cloudflare-controlplane"
+    name: "Cloudflare Global Control Plane"
+    type: "control_plane"
+    provider_id: "provider-cloudflare"
+  - id: "fd-okta-tenant"
+    name: "Okta Corporate Tenant 01"
+    type: "account"
+    provider_id: "provider-okta"
+
+components:
+  # Primary Stack
+  - id: "apexpay-primary-api"
+    name: "ApexPay API Gateway (AWS)"
+    type: "api_gateway"
+    provider_id: "provider-aws"
+    deployment_id: "deploy-aws-eu-west-1"
+    failure_domains: ["fd-aws-eu-west-1"]
+    description: "Primary ingress API handling inbound merchant payment requests."
+
+  - id: "primary-settlement-engine"
+    name: "Settlement Engine Core (AWS)"
+    type: "service"
+    provider_id: "provider-aws"
+    deployment_id: "deploy-aws-eu-west-1"
+    failure_domains: ["fd-aws-eu-west-1"]
+
+  - id: "primary-ledger-db"
+    name: "PostgreSQL Aurora Cluster (AWS)"
+    type: "database"
+    provider_id: "provider-aws"
+    deployment_id: "deploy-aws-eu-west-1"
+    failure_domains: ["fd-aws-eu-west-1"]
+
+  - id: "primary-redis-cache"
+    name: "Redis Cache Cluster (AWS)"
+    type: "cache"
+    provider_id: "provider-aws"
+    deployment_id: "deploy-aws-eu-west-1"
+    failure_domains: ["fd-aws-eu-west-1"]
+
+  # Backup Stack
+  - id: "apexpay-backup-api"
+    name: "ApexPay API Standby (Azure)"
+    type: "api_gateway"
+    provider_id: "provider-azure"
+    deployment_id: "deploy-azure-westeurope"
+    failure_domains: ["fd-azure-westeurope"]
+    description: "Standby API ingress router configured for automatic DNS failover."
+
+  - id: "backup-settlement-engine"
+    name: "Settlement Engine Standby (Azure)"
+    type: "service"
+    provider_id: "provider-azure"
+    deployment_id: "deploy-azure-westeurope"
+    failure_domains: ["fd-azure-westeurope"]
+
+  - id: "backup-ledger-db"
+    name: "Azure Cosmos DB Replicated Ledger"
+    type: "database"
+    provider_id: "provider-azure"
+    deployment_id: "deploy-azure-westeurope"
+    failure_domains: ["fd-azure-westeurope"]
+
+  # External & Shared Components (The Hidden Trap)
+  - id: "shared-iam-directory"
+    name: "Okta Enterprise Auth Directory (Shared Tenant 01)"
+    type: "idp"
+    provider_id: "provider-okta"
+    deployment_id: "deploy-okta-us-cell"
+    failure_domains: ["fd-okta-tenant"]
+    description: "Single shared Okta tenant used for token introspection and merchant auth by BOTH AWS and Azure!"
+
+  - id: "shared-edge-dns"
+    name: "Cloudflare Edge Routing & DNS"
+    type: "dns"
+    provider_id: "provider-cloudflare"
+    deployment_id: "deploy-cloudflare-global"
+    failure_domains: ["fd-cloudflare-controlplane"]
+    description: "Authoritative DNS routing merchant requests to either AWS or Azure standby."
+
+  - id: "ext-gateway-stripe"
+    name: "Stripe Processing API"
+    type: "gateway"
+    provider_id: "provider-stripe"
+    failure_domains: []
+    description: "Tier 1 payment processor"
+
+  - id: "ext-gateway-adyen"
+    name: "Adyen Processing API"
+    type: "gateway"
+    provider_id: "provider-adyen"
+    failure_domains: []
+    description: "Tier 1 payment processor alternative"
+
+  - id: "analytics-collector"
+    name: "Telemetry & Audit Logger"
+    type: "service"
+    provider_id: "provider-aws"
+    deployment_id: "deploy-aws-eu-west-1"
+    failure_domains: ["fd-aws-eu-west-1"]
+    description: "Non-mandatory metrics streamer"
+
+dependency_groups:
+  # Primary external gateway ANY rule
+  - id: "group-primary-payment-processors"
+    dependent_component_id: "primary-settlement-engine"
+    name: "Primary External Gateway Failover (ANY)"
+    rule: "ANY"
+    member_target_ids: ["ext-gateway-stripe", "ext-gateway-adyen"]
+    description: "Either Stripe or Adyen must be operational for settlement processing."
+
+  # Backup external gateway ANY rule
+  - id: "group-backup-payment-processors"
+    dependent_component_id: "backup-settlement-engine"
+    name: "Backup External Gateway Failover (ANY)"
+    rule: "ANY"
+    member_target_ids: ["ext-gateway-stripe", "ext-gateway-adyen"]
+    description: "Backup arrangement can also route transactions to either processor."
+
+dependencies:
+  # Primary arrangement mandatory dependencies
+  - id: "dep-prim-api-to-dns"
+    source_component_id: "apexpay-primary-api"
+    target_component_id: "shared-edge-dns"
+    rule: "ALL"
+    evidence:
+      id: "ev-001"
+      status: "CONFIRMED"
+      source: "Terraform Route53 & Cloudflare Zone Config v4.2"
+      evidence_date: "2026-10-15"
+      verification_date: "2026-10-20"
+      owner: "DevOps / SRE Team"
+      validity_period_days: 180
+
+  - id: "dep-prim-api-to-iam"
+    source_component_id: "apexpay-primary-api"
+    target_component_id: "shared-iam-directory"
+    rule: "ALL"
+    evidence:
+      id: "ev-002"
+      status: "CONFIRMED"
+      source: "Auth0/Okta OIDC Envoy Sidecar Config"
+      evidence_date: "2026-09-01"
+      verification_date: "2026-09-10"
+      owner: "Security Architecture"
+      validity_period_days: 180
+
+  - id: "dep-prim-api-to-settlement"
+    source_component_id: "apexpay-primary-api"
+    target_component_id: "primary-settlement-engine"
+    rule: "ALL"
+    evidence:
+      id: "ev-003"
+      status: "CONFIRMED"
+      source: "Kubernetes Ingress Controller Service Mesh Spec"
+      evidence_date: "2026-10-01"
+      verification_date: "2026-10-05"
+      owner: "Core Platform"
+      validity_period_days: 180
+
+  - id: "dep-prim-settle-to-db"
+    source_component_id: "primary-settlement-engine"
+    target_component_id: "primary-ledger-db"
+    rule: "ALL"
+    evidence:
+      id: "ev-004"
+      status: "CONFIRMED"
+      source: "Application properties: SPRING_DATASOURCE_URL"
+      evidence_date: "2026-10-10"
+      verification_date: "2026-10-12"
+      owner: "Database Engineering"
+      validity_period_days: 180
+
+  - id: "dep-prim-settle-to-stripe"
+    source_component_id: "primary-settlement-engine"
+    target_component_id: "ext-gateway-stripe"
+    group_id: "group-primary-payment-processors"
+    rule: "ANY"
+    evidence:
+      id: "ev-005"
+      status: "CONFIRMED"
+      source: "Multi-acquirer SDK Integration Spec v1.8"
+      evidence_date: "2026-08-15"
+      verification_date: "2026-08-20"
+      owner: "Payment Partnerships"
+      validity_period_days: 180
+
+  - id: "dep-prim-settle-to-adyen"
+    source_component_id: "primary-settlement-engine"
+    target_component_id: "ext-gateway-adyen"
+    group_id: "group-primary-payment-processors"
+    rule: "ANY"
+    evidence:
+      id: "ev-006"
+      status: "CONFIRMED"
+      source: "Multi-acquirer SDK Integration Spec v1.8"
+      evidence_date: "2026-08-15"
+      verification_date: "2026-08-20"
+      owner: "Payment Partnerships"
+      validity_period_days: 180
+
+  - id: "dep-prim-settle-to-cache"
+    source_component_id: "primary-settlement-engine"
+    target_component_id: "primary-redis-cache"
+    rule: "OPTIONAL"
+    evidence:
+      id: "ev-007"
+      status: "CONFIRMED"
+      source: "Architecture Decision Record ADR-014: Redis Cache-Aside with DB Fallback"
+      evidence_date: "2026-07-01"
+      verification_date: "2026-07-15"
+      owner: "Platform Architecture"
+      validity_period_days: 180
+
+  - id: "dep-prim-settle-to-analytics"
+    source_component_id: "primary-settlement-engine"
+    target_component_id: "analytics-collector"
+    rule: "OPTIONAL"
+    evidence:
+      id: "ev-008"
+      status: "INFERRED"
+      source: "Wiki page: Logging and Telemetry Guide (Unverified in code)"
+      evidence_date: "2026-01-10"
+      verification_date: "2026-01-15"
+      owner: "Data Platform"
+      validity_period_days: 180
+
+  # Backup arrangement dependencies (The Hidden Failure)
+  - id: "dep-backup-api-to-dns"
+    source_component_id: "apexpay-backup-api"
+    target_component_id: "shared-edge-dns"
+    rule: "ALL"
+    evidence:
+      id: "ev-009"
+      status: "CONFIRMED"
+      source: "Azure Traffic Manager / Cloudflare DNS Health Check"
+      evidence_date: "2026-09-20"
+      verification_date: "2026-09-25"
+      owner: "DevOps / SRE Team"
+      validity_period_days: 180
+
+  - id: "dep-backup-api-to-iam"
+    source_component_id: "apexpay-backup-api"
+    target_component_id: "shared-iam-directory"
+    rule: "ALL"
+    evidence:
+      id: "ev-010"
+      status: "UNVERIFIED"
+      source: "Slack thread #dr-standby 'We pointed Azure API to same Okta tenant for simplicity'"
+      evidence_date: "2026-02-14"
+      verification_date: null
+      owner: "Standby Project Contractor"
+      validity_period_days: 90
+
+  - id: "dep-backup-api-to-settlement"
+    source_component_id: "apexpay-backup-api"
+    target_component_id: "backup-settlement-engine"
+    rule: "ALL"
+    evidence:
+      id: "ev-011"
+      status: "CONFIRMED"
+      source: "Azure Container Apps deployment manifest"
+      evidence_date: "2026-09-01"
+      verification_date: "2026-09-05"
+      owner: "Standby Engineering"
+      validity_period_days: 180
+
+  - id: "dep-backup-settle-to-db"
+    source_component_id: "backup-settlement-engine"
+    target_component_id: "backup-ledger-db"
+    rule: "ALL"
+    evidence:
+      id: "ev-012"
+      status: "CONFIRMED"
+      source: "Azure Cosmos DB Connection String Config"
+      evidence_date: "2026-09-01"
+      verification_date: "2026-09-05"
+      owner: "Database Engineering"
+      validity_period_days: 180
+
+  - id: "dep-backup-settle-to-stripe"
+    source_component_id: "backup-settlement-engine"
+    target_component_id: "ext-gateway-stripe"
+    group_id: "group-backup-payment-processors"
+    rule: "ANY"
+    evidence:
+      id: "ev-013"
+      status: "CONFIRMED"
+      source: "Multi-acquirer SDK Integration Spec v1.8"
+      evidence_date: "2026-08-15"
+      verification_date: "2026-08-20"
+      owner: "Payment Partnerships"
+      validity_period_days: 180
+
+  - id: "dep-backup-settle-to-adyen"
+    source_component_id: "backup-settlement-engine"
+    target_component_id: "ext-gateway-adyen"
+    group_id: "group-backup-payment-processors"
+    rule: "ANY"
+    evidence:
+      id: "ev-014"
+      status: "CONFIRMED"
+      source: "Multi-acquirer SDK Integration Spec v1.8"
+      evidence_date: "2026-08-15"
+      verification_date: "2026-08-20"
+      owner: "Payment Partnerships"
+      validity_period_days: 180
+
+assumptions:
+  - "Stripe and Adyen are redundant alternative payment gateways; either processor can handle full settlement volume."
+  - "Azure standby environment is continuously warm and synchronized with transactions via DB replication."
+  - "Redis cache failure degrades latency by 80ms but does not interrupt payment settlement."
+  - "Okta token validation is required synchronously on every inbound payment transaction."

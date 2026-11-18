@@ -1,0 +1,8 @@
+id: "SCN-01-SINGLE-COMPONENT"
+name: "Single Component Failure"
+description: "Primary Aurora database cluster fails due to storage volume corruption."
+failed_component_ids:
+  - "primary-ledger-db"
+failed_failure_domain_ids: []
+assumptions:
+  - "Primary PostgreSQL Aurora cluster experiences total outage."

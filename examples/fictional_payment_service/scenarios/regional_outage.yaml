@@ -1,0 +1,8 @@
+id: "SCN-02-REGIONAL-OUTAGE"
+name: "Regional Outage"
+description: "Total outage across AWS Ireland region eu-west-1 affecting all compute and RDS instances."
+failed_component_ids: []
+failed_failure_domain_ids:
+  - "fd-aws-eu-west-1"
+assumptions:
+  - "All workloads and managed components residing within fd-aws-eu-west-1 collapse simultaneously."

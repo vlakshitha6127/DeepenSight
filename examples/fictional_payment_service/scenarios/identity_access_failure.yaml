@@ -1,0 +1,9 @@
+id: "SCN-04-IDENTITY-ACCESS-FAILURE"
+name: "Identity or Access Failure"
+description: "Global outage of Okta Corporate Tenant 01 causing token introspection failures."
+failed_component_ids:
+  - "shared-iam-directory"
+failed_failure_domain_ids:
+  - "fd-okta-tenant"
+assumptions:
+  - "Okta token issuance and JWT verification service fail completely."

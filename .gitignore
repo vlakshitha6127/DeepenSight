@@ -221,3 +221,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Node & Frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+.eslintcache
+
+# Local Generated Reports & Assessment Dumps (customer data protection)
+output/
+reports/
+generated_reports/
